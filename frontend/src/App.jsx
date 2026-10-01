@@ -4,6 +4,7 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Diseases from './pages/Diseases';
+import Chatbot from './components/Chatbot';
 import './index.css';
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/diseases" element={<Diseases />} />
       </Routes>
+      <Chatbot />
     </Router>
   );
 }

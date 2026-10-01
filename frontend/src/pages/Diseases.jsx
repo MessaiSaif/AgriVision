@@ -39,7 +39,15 @@ function DiseaseCard({ disease }) {
   const isHealthy = disease.name.toLowerCase().includes('healthy');
 
   return (
-    <div className="glass-card" style={{ padding: '1.5rem', cursor: 'pointer' }} onClick={() => setExpanded(!expanded)}>
+    <div className="glass-card" style={{ padding: '1.5rem', cursor: 'pointer', display: 'flex', flexDirection: 'column' }} onClick={() => setExpanded(!expanded)}>
+      <div style={{ width: '100%', height: '180px', borderRadius: 'var(--radius-sm)', overflow: 'hidden', marginBottom: '1rem', background: 'rgba(255,255,255,0.05)', flexShrink: 0 }}>
+        <img 
+          src={`/diseases/${disease.id}.jpg`} 
+          alt={disease.name} 
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+          onError={(e) => { e.target.parentElement.style.display = 'none'; }}
+        />
+      </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
         <div style={{ flex: 1 }}>
           <h3 style={{ color: 'white', fontSize: '1rem', fontWeight: 600, marginBottom: '0.4rem' }}>

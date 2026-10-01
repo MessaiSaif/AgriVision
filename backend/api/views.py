@@ -1,5 +1,8 @@
 from rest_framework import viewsets, permissions, status
+from rest_framework.views import APIView
 from rest_framework.decorators import action
+import google.generativeai as genai
+import os
 from rest_framework.response import Response
 from .models import User, Culture, Disease, Analysis, ChatHistory
 from .serializers import (
@@ -149,6 +152,42 @@ class AnalysisViewSet(viewsets.ModelViewSet):
         analyses = self.get_queryset()[:5]
         serializer = self.get_serializer(analyses, many=True)
         return Response(serializer.data)
+
+class ChatbotView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        user_message = request.data.get('message')
+        if not user_message:
+            return Response({'error': 'Message required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            from dotenv import load_dotenv
+            from django.conf import settings
+            load_dotenv(settings.BASE_DIR / '.env')
+            api_key = os.environ.get("GEMINI_API_KEY")
+
+        if not api_key:
+            return Response({'error': 'Gemini API Key missing'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-3.8-flash')
+        
+        diseases = Disease.objects.all()
+        context_str = "Tu es un expert agronome de AgriVision. Voici les maladies et plantes que tu peux diagnostiquer :\n"
+        for d in diseases:
+            context_str += f"- Plante: {d.plant}, Maladie: {d.name}, Symptômes: {d.symptoms}, Traitement: {d.advice}\n"
+        
+        context_str += "\nRéponds de manière concise, empathique et très professionnelle à l'agriculteur. N'invente pas de maladies qui ne sont pas dans la liste, mais tu peux donner des conseils généraux. Question de l'agriculteur:\n"
+        
+        prompt = f"{context_str}\nAgriculteur: {user_message}\nExpert AgriVision:"
+        
+        try:
+            response = model.generate_content(prompt)
+            return Response({'reply': response.text})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 

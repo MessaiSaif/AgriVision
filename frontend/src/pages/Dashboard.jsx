@@ -80,6 +80,12 @@ function Dashboard() {
     color: 'white', outline: 'none', fontFamily: 'inherit', fontSize: '1rem',
   };
 
+  const AVAILABLE_PLANTS = [
+    "Pomme", "Myrtille", "Cerise", "Maïs", "Raisin", 
+    "Orange", "Pêche", "Poivron", "Pomme de terre", 
+    "Framboise", "Soja", "Courge", "Fraise", "Tomate"
+  ];
+
   return (
     <>
       {/* Modal d'ajout de culture */}
@@ -95,7 +101,12 @@ function Dashboard() {
             </div>
             <form onSubmit={handleAddCulture} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <input style={inputStyle} placeholder="Nom du champ (ex: Champ Nord)" required value={newCulture.name} onChange={e => setNewCulture({...newCulture, name: e.target.value})} />
-              <input style={inputStyle} placeholder="Type de plante (ex: Tomate)" required value={newCulture.plant_type} onChange={e => setNewCulture({...newCulture, plant_type: e.target.value})} />
+              <select style={{ ...inputStyle, cursor: 'pointer' }} required value={newCulture.plant_type} onChange={e => setNewCulture({...newCulture, plant_type: e.target.value})}>
+                <option value="" disabled>Sélectionnez un type de plante</option>
+                {AVAILABLE_PLANTS.map(plant => (
+                  <option key={plant} value={plant} style={{ color: 'black' }}>{plant}</option>
+                ))}
+              </select>
               <input style={inputStyle} type="date" required value={newCulture.planting_date} onChange={e => setNewCulture({...newCulture, planting_date: e.target.value})} />
               <input style={inputStyle} placeholder="Localisation (optionnel)" value={newCulture.location} onChange={e => setNewCulture({...newCulture, location: e.target.value})} />
               <button type="submit" className="btn btn-primary" style={{ marginTop: '0.5rem' }}>Enregistrer la culture</button>
