@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Culture, Disease, Analysis, ChatHistory
+from .models import User, Culture, Disease, Analysis, ChatHistory, Task, InventoryItem, FinanceRecord
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -35,3 +35,21 @@ class ChatHistorySerializer(serializers.ModelSerializer):
         model = ChatHistory
         fields = '__all__'
         read_only_fields = ['user', 'response', 'date']
+
+class TaskSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Task
+        fields = '__all__'
+        read_only_fields = ['user', 'created_at']
+
+class InventoryItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InventoryItem
+        fields = '__all__'
+        read_only_fields = ['user']
+
+class FinanceRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FinanceRecord
+        fields = '__all__'
+        read_only_fields = ['user']

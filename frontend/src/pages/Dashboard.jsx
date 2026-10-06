@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Leaf, Plus, List, BarChart2, Settings, LogOut, Loader, X, BookOpen } from 'lucide-react';
+import { Leaf, Plus, List, BarChart2, Settings, LogOut, Loader, X, BookOpen, CheckSquare, Package, DollarSign } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getMyProfile, logout } from '../services/auth';
 import api from '../services/api';
@@ -131,7 +131,7 @@ function Dashboard() {
           {/* Sidebar */}
           <aside className="glass-card animate-fade-in delay-1" style={{ padding: '1.5rem 1rem', height: 'fit-content' }}>
             <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              {sidebarItems.map(item => (
+              {user?.role !== 'ADMINISTRATEUR' && sidebarItems.map(item => (
                 <li key={item.id}>
                   <button onClick={() => setActiveTab(item.id)}
                     style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.875rem 1rem', width: '100%', background: activeTab === item.id ? 'rgba(16, 185, 129, 0.1)' : 'transparent', color: activeTab === item.id ? 'var(--color-primary)' : 'var(--color-text-muted)', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.95rem', fontWeight: 500, transition: 'all 0.2s', textAlign: 'left' }}>
@@ -139,24 +139,62 @@ function Dashboard() {
                   </button>
                 </li>
               ))}
-              <li style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
+              {user?.role !== 'ADMINISTRATEUR' && (
+                <>
+                  <li style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
+                    <Link to="/tasks"
+                      style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.875rem 1rem', color: 'var(--color-text-muted)', borderRadius: 'var(--radius-sm)', textDecoration: 'none', fontSize: '0.95rem', fontWeight: 500 }}>
+                      <CheckSquare size={20} /> Mes Tâches
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/inventory"
+                      style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.875rem 1rem', color: 'var(--color-text-muted)', borderRadius: 'var(--radius-sm)', textDecoration: 'none', fontSize: '0.95rem', fontWeight: 500 }}>
+                      <Package size={20} /> Inventaire
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/finances"
+                      style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.875rem 1rem', color: 'var(--color-text-muted)', borderRadius: 'var(--radius-sm)', textDecoration: 'none', fontSize: '0.95rem', fontWeight: 500 }}>
+                      <DollarSign size={20} /> Finances
+                    </Link>
+                  </li>
+                </>
+              )}
+              <li style={{ marginTop: user?.role === 'ADMINISTRATEUR' ? '0' : '0.5rem', paddingTop: user?.role === 'ADMINISTRATEUR' ? '0' : '0.5rem', borderTop: user?.role === 'ADMINISTRATEUR' ? 'none' : '1px solid var(--color-border)' }}>
                 <Link to="/diseases"
                   style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.875rem 1rem', color: 'var(--color-text-muted)', borderRadius: 'var(--radius-sm)', textDecoration: 'none', fontSize: '0.95rem', fontWeight: 500 }}>
                   <BookOpen size={20} /> Catalogue Maladies
                 </Link>
               </li>
-              <li>
-                <Link to="/"
-                  style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.875rem 1rem', color: 'var(--color-text-muted)', borderRadius: 'var(--radius-sm)', textDecoration: 'none', fontSize: '0.95rem', fontWeight: 500 }}>
-                  <Leaf size={20} /> Nouvelle Analyse
-                </Link>
-              </li>
+              {user?.role !== 'ADMINISTRATEUR' && (
+                <li>
+                  <Link to="/"
+                    style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.875rem 1rem', color: 'var(--color-text-muted)', borderRadius: 'var(--radius-sm)', textDecoration: 'none', fontSize: '0.95rem', fontWeight: 500 }}>
+                    <Leaf size={20} /> Nouvelle Analyse
+                  </Link>
+                </li>
+              )}
             </ul>
           </aside>
 
           {/* Contenu principal */}
-          <main className="animate-fade-in delay-2">
-            {activeTab === 'cultures' && (
+          {user?.role === 'ADMINISTRATEUR' ? (
+            <main className="animate-fade-in delay-2">
+              <div className="glass-card" style={{ padding: '3rem', textAlign: 'center', marginTop: '2rem' }}>
+                <Settings size={48} color="var(--color-primary)" style={{ margin: '0 auto 1.5rem' }} />
+                <h2 style={{ fontSize: '1.8rem', marginBottom: '1rem' }}>Panneau d'Administration</h2>
+                <p style={{ color: 'var(--color-text-muted)', fontSize: '1.1rem', marginBottom: '2rem', maxWidth: '600px', margin: '0 auto 2rem' }}>
+                  En tant qu'administrateur, votre rôle est de gérer la base de données globale (utilisateurs, maladies, plantes). Les fonctionnalités de la ferme (analyses, tâches, inventaire) sont réservées aux agriculteurs.
+                </p>
+                <a href="http://127.0.0.1:8000/admin/" target="_blank" rel="noreferrer" className="btn btn-primary" style={{ display: 'inline-flex', padding: '0.75rem 1.5rem', textDecoration: 'none', fontSize: '1.1rem' }}>
+                  Ouvrir l'Admin Django
+                </a>
+              </div>
+            </main>
+          ) : (
+            <main className="animate-fade-in delay-2">
+              {activeTab === 'cultures' && (
               <>
                 {/* Stats rapides */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
@@ -239,6 +277,7 @@ function Dashboard() {
               </div>
             )}
           </main>
+          )}
         </div>
       </div>
     </>

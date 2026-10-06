@@ -18,6 +18,17 @@ def seed():
     else:
         print("Le super-administrateur existe déjà.")
 
+    if not User.objects.filter(username="agri").exists():
+        User.objects.create_user(
+            username="agri",
+            email="agri@agrivision.com",
+            password="agri",
+            role="AGRICULTEUR"
+        )
+        print("Agriculteur 'agri' créé avec succès (mot de passe: agri).")
+    else:
+        print("L'agriculteur 'agri' existe déjà.")
+
     diseases_data = [
         # --- POMME (Apple) ---
         {

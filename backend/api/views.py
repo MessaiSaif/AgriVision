@@ -4,10 +4,11 @@ from rest_framework.decorators import action
 import google.generativeai as genai
 import os
 from rest_framework.response import Response
-from .models import User, Culture, Disease, Analysis, ChatHistory
+from .models import User, Culture, Disease, Analysis, ChatHistory, Task, InventoryItem, FinanceRecord
 from .serializers import (
     UserSerializer, CultureSerializer, DiseaseSerializer,
-    AnalysisSerializer, ChatHistorySerializer
+    AnalysisSerializer, ChatHistorySerializer,
+    TaskSerializer, InventoryItemSerializer, FinanceRecordSerializer
 )
 
 
@@ -189,5 +190,32 @@ class ChatbotView(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class TaskViewSet(viewsets.ModelViewSet):
+    serializer_class = TaskSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        return Task.objects.filter(user=self.request.user).order_by('-created_at')
 
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+class InventoryItemViewSet(viewsets.ModelViewSet):
+    serializer_class = InventoryItemSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return InventoryItem.objects.filter(user=self.request.user).order_by('name')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+class FinanceRecordViewSet(viewsets.ModelViewSet):
+    serializer_class = FinanceRecordSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return FinanceRecord.objects.filter(user=self.request.user).order_by('-date')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
