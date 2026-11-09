@@ -1,14 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Loader } from 'lucide-react';
+import { MessageCircle, X, Send, Loader, Trash2 } from 'lucide-react';
 import api from '../services/api';
+import { isAuthenticated } from '../services/auth';
+
+const INITIAL_GREETING = {
+  text: "Bonjour ! Je suis l'expert IA d'AgriVision. Posez-moi vos questions sur les plantes et maladies !",
+  isBot: true
+};
 
 export default function Chatbot() {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    { text: "Bonjour ! Je suis l'expert IA d'AgriVision. Posez-moi vos questions sur les plantes et maladies !", isBot: true }
-  ]);
+  const [messages, setMessages] = useState([INITIAL_GREETING]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -17,7 +22,38 @@ export default function Chatbot() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, loading]);
+  }, [messages, loading, isOpen]);
+
+  // Charger l'historique depuis la base de données à l'ouverture si connecté
+  useEffect(() => {
+    if (isOpen && isAuthenticated() && !historyLoaded) {
+      api.get('chat/')
+        .then(res => {
+          if (Array.isArray(res.data) && res.data.length > 0) {
+            const formatted = [INITIAL_GREETING];
+            res.data.forEach(item => {
+              formatted.push({ text: item.message, isBot: false, date: item.date });
+              formatted.push({ text: item.response, isBot: true, date: item.date });
+            });
+            setMessages(formatted);
+          }
+          setHistoryLoaded(true);
+        })
+        .catch(() => {});
+    }
+  }, [isOpen, historyLoaded]);
+
+  const handleClearHistory = async () => {
+    if (!window.confirm("Effacer tout l'historique de conversation ?")) return;
+    try {
+      if (isAuthenticated()) {
+        await api.delete('chat/');
+      }
+      setMessages([INITIAL_GREETING]);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -31,7 +67,7 @@ export default function Chatbot() {
     try {
       const response = await api.post('chat/', { message: userMessage });
       setMessages(prev => [...prev, { text: response.data.reply, isBot: true }]);
-    } catch (error) {
+    } catch {
       setMessages(prev => [...prev, { text: "Désolé, une erreur s'est produite lors de la connexion à l'IA.", isBot: true }]);
     } finally {
       setLoading(false);
@@ -58,9 +94,20 @@ export default function Chatbot() {
               <MessageCircle size={20} color="var(--color-primary)" />
               <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'white' }}>Expert IA</h3>
             </div>
-            <button onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}>
-              <X size={20} />
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              {messages.length > 1 && (
+                <button
+                  onClick={handleClearHistory}
+                  title="Effacer l'historique"
+                  style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                >
+                  <Trash2 size={17} />
+                </button>
+              )}
+              <button onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                <X size={20} />
+              </button>
+            </div>
           </div>
 
           <div style={{ flex: 1, padding: '1rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>

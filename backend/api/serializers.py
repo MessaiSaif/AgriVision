@@ -5,11 +5,20 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'role', 'password']
-        extra_kwargs = {'password': {'write_only': True}}
+        extra_kwargs = {'password': {'write_only': True, 'required': False}}
 
     def create(self, validated_data):
         user = User.objects.create_user(**validated_data)
         return user
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop('password', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        if password:
+            instance.set_password(password)
+        instance.save()
+        return instance
 
 class CultureSerializer(serializers.ModelSerializer):
     class Meta:
@@ -24,6 +33,7 @@ class DiseaseSerializer(serializers.ModelSerializer):
 
 class AnalysisSerializer(serializers.ModelSerializer):
     disease_info = DiseaseSerializer(source='disease', read_only=True)
+    culture_info = CultureSerializer(source='culture', read_only=True)
     
     class Meta:
         model = Analysis
@@ -37,6 +47,8 @@ class ChatHistorySerializer(serializers.ModelSerializer):
         read_only_fields = ['user', 'response', 'date']
 
 class TaskSerializer(serializers.ModelSerializer):
+    culture_info = CultureSerializer(source='culture', read_only=True)
+
     class Meta:
         model = Task
         fields = '__all__'

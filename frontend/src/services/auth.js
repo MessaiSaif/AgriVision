@@ -25,6 +25,12 @@ export const getMyProfile = async () => {
     return response.data;
 };
 
+// Mettre à jour le profil ou le mot de passe de l'utilisateur connecté
+export const updateMyProfile = async (payload) => {
+    const response = await api.patch('users/me/', payload);
+    return response.data;
+};
+
 // Déconnexion : supprime les tokens du localStorage
 export const logout = () => {
     localStorage.removeItem('access_token');

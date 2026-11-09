@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Leaf, Activity, CheckCircle, ChevronRight, AlertTriangle } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { UploadCloud, Leaf, Activity, CheckCircle, ChevronRight, AlertTriangle, CalendarPlus, Check } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { isAuthenticated } from '../services/auth';
 import api from '../services/api';
 
@@ -12,18 +12,26 @@ function Home() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [cultures, setCultures] = useState([]);
   const [selectedCultureId, setSelectedCultureId] = useState('');
+  const [creatingTask, setCreatingTask] = useState(false);
+  const [taskCreated, setTaskCreated] = useState(false);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // Charger les cultures de l'utilisateur s'il est connecté
   useEffect(() => {
     if (isAuthenticated()) {
+      const preselectedCulture = searchParams.get('culture');
       api.get('cultures/').then(res => {
         setCultures(res.data);
-        if (res.data.length > 0) setSelectedCultureId(String(res.data[0].id));
+        if (preselectedCulture && res.data.some(c => String(c.id) === String(preselectedCulture))) {
+          setSelectedCultureId(String(preselectedCulture));
+        } else if (res.data.length > 0) {
+          setSelectedCultureId(String(res.data[0].id));
+        }
       }).catch(() => {});
     }
-  }, []);
+  }, [searchParams]);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -31,6 +39,7 @@ function Home() {
       setSelectedFile(file);
       setPreview(URL.createObjectURL(file));
       setResult(null);
+      setTaskCreated(false);
     }
   };
 
@@ -42,6 +51,7 @@ function Home() {
       setSelectedFile(file);
       setPreview(URL.createObjectURL(file));
       setResult(null);
+      setTaskCreated(false);
     }
   };
 
@@ -62,6 +72,7 @@ function Home() {
 
     setIsAnalyzing(true);
     setResult(null);
+    setTaskCreated(false);
 
     try {
       const formData = new FormData();
@@ -86,6 +97,34 @@ function Home() {
       console.error(err);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleCreateTreatmentTask = async () => {
+    if (!result || !selectedCultureId || creatingTask || taskCreated) return;
+    setCreatingTask(true);
+    try {
+      const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+      const cultureLabel = selectedCulture ? `${selectedCulture.name} (${selectedCulture.plant_type})` : 'Culture';
+      const title = result.isHealthy
+        ? `Contrôle sanitaire de suivi — ${cultureLabel}`
+        : `Traitement : ${result.name} — ${cultureLabel}`;
+      const description = result.advice
+        ? `Diagnostic IA (${result.confidence}% de confiance) : ${result.name}.\nTraitement recommandé : ${result.advice}`
+        : `Diagnostic IA (${result.confidence}% de confiance) : ${result.description}`;
+
+      await api.post('tasks/', {
+        title,
+        description,
+        culture: Number(selectedCultureId),
+        due_date: tomorrow,
+        status: 'PENDING'
+      });
+      setTaskCreated(true);
+    } catch {
+      alert("Erreur lors de la création automatique de la tâche.");
+    } finally {
+      setCreatingTask(false);
     }
   };
 
@@ -210,11 +249,40 @@ function Home() {
               </div>
               <p style={{ color: 'rgba(255,255,255,0.8)', marginBottom: '1rem', fontSize: '0.9rem' }}>{result.description}</p>
               {result.symptoms && <><h4 style={{ color: 'var(--color-secondary)', marginBottom: '0.4rem', fontSize: '0.9rem' }}>Symptômes :</h4><p style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>{result.symptoms}</p></>}
-              {result.advice && <><h4 style={{ color: 'var(--color-primary)', marginBottom: '0.4rem', fontSize: '0.9rem' }}>Traitement recommandé :</h4><p style={{ fontSize: '0.9rem' }}>{result.advice}</p></>}
-              <button className="btn btn-outline" style={{ marginTop: '1rem', width: '100%', padding: '0.6rem' }}
-                onClick={() => { setPreview(null); setSelectedFile(null); setResult(null); }}>
-                Nouvelle analyse
-              </button>
+              {result.advice && <><h4 style={{ color: 'var(--color-primary)', marginBottom: '0.4rem', fontSize: '0.9rem' }}>Traitement recommandé :</h4><p style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>{result.advice}</p></>}
+              
+              {/* Smart Workflow : Planifier automatiquement une tâche liée à cette culture */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginTop: '1rem' }}>
+                {!taskCreated ? (
+                  <button
+                    className="btn btn-primary"
+                    style={{ width: '100%', padding: '0.65rem 1rem', fontSize: '0.95rem' }}
+                    disabled={creatingTask}
+                    onClick={handleCreateTreatmentTask}
+                  >
+                    <CalendarPlus size={18} />
+                    {creatingTask
+                      ? 'Planification...'
+                      : result.isHealthy
+                        ? 'Planifier un contrôle de suivi'
+                        : 'Planifier le traitement dans Mes Tâches'}
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 1rem', borderRadius: 'var(--radius-sm)', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.35)', fontSize: '0.9rem' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-primary)', fontWeight: 600 }}>
+                      <Check size={18} /> Tâche ajoutée !
+                    </span>
+                    <Link to="/tasks" style={{ color: 'white', textDecoration: 'underline', fontWeight: 500, fontSize: '0.85rem' }}>
+                      Voir mes tâches →
+                    </Link>
+                  </div>
+                )}
+
+                <button className="btn btn-outline" style={{ width: '100%', padding: '0.6rem' }}
+                  onClick={() => { setPreview(null); setSelectedFile(null); setResult(null); setTaskCreated(false); }}>
+                  Nouvelle analyse
+                </button>
+              </div>
             </div>
           )}
         </div>

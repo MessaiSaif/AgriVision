@@ -11,19 +11,18 @@ function Finances() {
   const [newRecord, setNewRecord] = useState({ record_type: 'EXPENSE', amount: '', date: '', description: '', category: '' });
 
   useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await api.get('finances/');
+        setRecords(res.data);
+      } catch (err) {
+        if (err.response && err.response.status === 401) navigate('/login');
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    try {
-      const res = await api.get('finances/');
-      setRecords(res.data);
-    } catch (err) {
-      if (err.response && err.response.status === 401) navigate('/login');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [navigate]);
 
   const handleAddRecord = async (e) => {
     e.preventDefault();
@@ -32,7 +31,7 @@ function Finances() {
       setRecords([res.data, ...records]);
       setShowAddModal(false);
       setNewRecord({ record_type: 'EXPENSE', amount: '', date: '', description: '', category: '' });
-    } catch (err) {
+    } catch {
       alert("Erreur lors de l'ajout");
     }
   };
@@ -42,7 +41,7 @@ function Finances() {
     try {
       await api.delete(`finances/${id}/`);
       setRecords(records.filter(r => r.id !== id));
-    } catch (err) {
+    } catch {
       alert("Erreur");
     }
   };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Leaf, Plus, List, BarChart2, Settings, LogOut, Loader, X, BookOpen, CheckSquare, Package, DollarSign } from 'lucide-react';
+import { Leaf, Plus, List, BarChart2, Settings, LogOut, Loader, X, BookOpen, CheckSquare, Package, DollarSign, CalendarPlus, Check, Eye, Trash2, User, Lock } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getMyProfile, logout } from '../services/auth';
+import { getMyProfile, updateMyProfile, logout } from '../services/auth';
 import api from '../services/api';
 
 function Dashboard() {
@@ -14,27 +14,44 @@ function Dashboard() {
   const [newCulture, setNewCulture] = useState({ name: '', plant_type: '', planting_date: '', location: '' });
   const [activeTab, setActiveTab] = useState('cultures');
 
+  // Détail d'une analyse sélectionnée & création de tâche
+  const [selectedAnalysis, setSelectedAnalysis] = useState(null);
+  const [creatingTaskForId, setCreatingTaskForId] = useState(null);
+  const [createdTaskIds, setCreatedTaskIds] = useState({});
+
+  // État du formulaire Paramètres
+  const [profileForm, setProfileForm] = useState({ username: '', email: '' });
+  const [passwordForm, setPasswordForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
+  const [settingsMsg, setSettingsMsg] = useState(null);
+  const [savingSettings, setSavingSettings] = useState(false);
+
   useEffect(() => {
     // Charger les données au montage du composant
+    const fetchDashboardData = async () => {
+      try {
+        const [profileData, culturesData, analysesData] = await Promise.all([
+          getMyProfile(),
+          api.get('cultures/'),
+          api.get('analyses/')
+        ]);
+        setUser(profileData);
+        setProfileForm({ username: profileData.username || '', email: profileData.email || '' });
+        setCultures(culturesData.data);
+        setAnalyses(analysesData.data);
+      } catch {
+        // Si non authentifié, rediriger vers la connexion
+        navigate('/login');
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchDashboardData();
-  }, []);
+  }, [navigate]);
 
-  const fetchDashboardData = async () => {
-    try {
-      const [profileData, culturesData, analysesData] = await Promise.all([
-        getMyProfile(),
-        api.get('cultures/'),
-        api.get('analyses/recent/')
-      ]);
-      setUser(profileData);
-      setCultures(culturesData.data);
-      setAnalyses(analysesData.data);
-    } catch (err) {
-      // Si non authentifié, rediriger vers la connexion
-      navigate('/login');
-    } finally {
-      setLoading(false);
-    }
+  const getImageUrl = (img) => {
+    if (!img) return null;
+    if (img.startsWith('http')) return img;
+    return `http://127.0.0.1:8000${img.startsWith('/') ? '' : '/'}${img}`;
   };
 
   const handleLogout = () => {
@@ -49,7 +66,7 @@ function Dashboard() {
       setCultures([response.data, ...cultures]);
       setShowAddModal(false);
       setNewCulture({ name: '', plant_type: '', planting_date: '', location: '' });
-    } catch (err) {
+    } catch {
       alert("Erreur lors de l'ajout de la culture.");
     }
   };
@@ -58,6 +75,93 @@ function Dashboard() {
     if (!window.confirm("Supprimer cette culture ?")) return;
     await api.delete(`cultures/${id}/`);
     setCultures(cultures.filter(c => c.id !== id));
+  };
+
+  const handleDeleteAnalysis = async (id) => {
+    if (!window.confirm("Supprimer cette analyse de l'historique ?")) return;
+    try {
+      await api.delete(`analyses/${id}/`);
+      setAnalyses(analyses.filter(a => a.id !== id));
+      if (selectedAnalysis?.id === id) setSelectedAnalysis(null);
+    } catch {
+      alert("Erreur lors de la suppression de l'analyse.");
+    }
+  };
+
+  const handleCreateTaskFromAnalysis = async (analysis) => {
+    if (!analysis || creatingTaskForId === analysis.id || createdTaskIds[analysis.id]) return;
+    setCreatingTaskForId(analysis.id);
+    try {
+      const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+      const diseaseName = analysis.disease_info?.name || 'Diagnostic';
+      const isHealthy = diseaseName.toLowerCase().includes('healthy');
+      const cultureObj = analysis.culture_info || cultures.find(c => c.id === analysis.culture);
+      const cultureLabel = cultureObj ? `${cultureObj.name} (${cultureObj.plant_type})` : 'Culture';
+      const confidencePct = Math.round((analysis.confidence || 0) * 100);
+
+      const title = isHealthy
+        ? `Contrôle sanitaire de suivi — ${cultureLabel}`
+        : `Traitement : ${diseaseName} — ${cultureLabel}`;
+      const description = analysis.disease_info?.advice
+        ? `Diagnostic IA (${confidencePct}% de confiance) : ${diseaseName}.\nTraitement recommandé : ${analysis.disease_info.advice}`
+        : `Diagnostic IA (${confidencePct}% de confiance) : ${analysis.disease_info?.description || diseaseName}`;
+
+      await api.post('tasks/', {
+        title,
+        description,
+        culture: analysis.culture,
+        due_date: tomorrow,
+        status: 'PENDING'
+      });
+      setCreatedTaskIds(prev => ({ ...prev, [analysis.id]: true }));
+    } catch {
+      alert("Erreur lors de la création de la tâche.");
+    } finally {
+      setCreatingTaskForId(null);
+    }
+  };
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    setSettingsMsg(null);
+    setSavingSettings(true);
+    try {
+      const updated = await updateMyProfile({
+        username: profileForm.username,
+        email: profileForm.email,
+      });
+      setUser(updated);
+      setSettingsMsg({ type: 'success', text: 'Profil mis à jour avec succès.' });
+    } catch (err) {
+      const errData = err.response?.data;
+      const msg = errData?.username?.[0] || errData?.email?.[0] || errData?.error || "Erreur lors de la mise à jour du profil.";
+      setSettingsMsg({ type: 'error', text: msg });
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setSettingsMsg(null);
+    if (passwordForm.new_password !== passwordForm.confirm_password) {
+      setSettingsMsg({ type: 'error', text: 'Les nouveaux mots de passe ne correspondent pas.' });
+      return;
+    }
+    setSavingSettings(true);
+    try {
+      await updateMyProfile({
+        current_password: passwordForm.current_password,
+        new_password: passwordForm.new_password,
+      });
+      setPasswordForm({ current_password: '', new_password: '', confirm_password: '' });
+      setSettingsMsg({ type: 'success', text: 'Mot de passe modifié avec succès.' });
+    } catch (err) {
+      const msg = err.response?.data?.error || "Erreur lors du changement de mot de passe.";
+      setSettingsMsg({ type: 'error', text: msg });
+    } finally {
+      setSavingSettings(false);
+    }
   };
 
   if (loading) {
@@ -232,7 +336,7 @@ function Dashboard() {
                         {culture.location && <p style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>📍 {culture.location}</p>}
                         <p style={{ fontSize: '0.9rem' }}>Planté le : {new Date(culture.planting_date).toLocaleDateString('fr-FR')}</p>
                         <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '1rem', marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Link to="/" style={{ color: 'var(--color-primary)', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 600 }}>Analyser →</Link>
+                          <Link to={`/?culture=${culture.id}`} style={{ color: 'var(--color-primary)', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 600 }}>Analyser →</Link>
                           <button onClick={() => handleDeleteCulture(culture.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171', fontSize: '0.85rem' }}>Supprimer</button>
                         </div>
                       </div>
@@ -244,36 +348,261 @@ function Dashboard() {
 
             {activeTab === 'analyses' && (
               <>
-                <h2 style={{ marginBottom: '2rem' }}>Analyses récentes</h2>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                  <h2 style={{ margin: 0 }}>Historique des Analyses <span style={{ color: 'var(--color-text-muted)', fontWeight: 400, fontSize: '1.2rem' }}>({analyses.length})</span></h2>
+                  <Link to="/" className="btn btn-primary" style={{ padding: '0.6rem 1.25rem', textDecoration: 'none', fontSize: '0.95rem' }}>
+                    <Plus size={18} /> Nouvelle Analyse
+                  </Link>
+                </div>
                 {analyses.length === 0 ? (
                   <div className="glass-card" style={{ textAlign: 'center', padding: '4rem' }}>
                     <BarChart2 size={48} color="var(--color-text-muted)" style={{ margin: '0 auto 1rem' }} />
                     <p>Aucune analyse effectuée pour l'instant.</p>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {analyses.map(a => (
-                      <div key={a.id} className="glass-card" style={{ padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <p style={{ fontWeight: 600, color: 'white', marginBottom: '0.25rem' }}>{a.disease_info?.name || 'Analyse en attente'}</p>
-                          <p style={{ fontSize: '0.85rem' }}>{new Date(a.date).toLocaleString('fr-FR')}</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    {analyses.map(a => {
+                      const isHealthy = a.disease_info?.name?.toLowerCase().includes('healthy');
+                      const cultureObj = a.culture_info || cultures.find(c => c.id === a.culture);
+                      const isExpanded = selectedAnalysis?.id === a.id;
+                      const imgUrl = getImageUrl(a.image);
+
+                      return (
+                        <div key={a.id} className="glass-card" style={{ padding: '1.25rem 1.5rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+                              {imgUrl ? (
+                                <img
+                                  src={imgUrl}
+                                  alt="Feuille analysée"
+                                  style={{ width: '68px', height: '68px', borderRadius: 'var(--radius-sm)', objectFit: 'cover', border: '1px solid var(--color-border)' }}
+                                />
+                              ) : (
+                                <div style={{ width: '68px', height: '68px', borderRadius: 'var(--radius-sm)', background: 'rgba(16, 185, 129, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <Leaf size={26} color="var(--color-primary)" />
+                                </div>
+                              )}
+                              <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap', marginBottom: '0.35rem' }}>
+                                  <p style={{ fontWeight: 600, color: 'white', margin: 0, fontSize: '1.05rem' }}>
+                                    {a.disease_info?.name || 'Analyse en attente'}
+                                  </p>
+                                  {cultureObj && (
+                                    <span className="badge" style={{ marginBottom: 0, fontSize: '0.75rem', padding: '0.15rem 0.6rem' }}>
+                                      🌱 {cultureObj.name} ({cultureObj.plant_type})
+                                    </span>
+                                  )}
+                                </div>
+                                <p style={{ fontSize: '0.85rem', margin: 0 }}>
+                                  {new Date(a.date).toLocaleString('fr-FR')}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                              {a.confidence != null && (
+                                <span style={{
+                                  background: isHealthy ? 'rgba(16, 185, 129, 0.15)' : 'rgba(248, 113, 113, 0.15)',
+                                  color: isHealthy ? 'var(--color-primary)' : '#f87171',
+                                  padding: '0.25rem 0.75rem',
+                                  borderRadius: '100px',
+                                  fontWeight: 600,
+                                  fontSize: '0.9rem'
+                                }}>
+                                  {Math.round(a.confidence * 100)}%
+                                </span>
+                              )}
+                              <button
+                                className="btn btn-outline"
+                                onClick={() => setSelectedAnalysis(isExpanded ? null : a)}
+                                style={{ padding: '0.45rem 0.9rem', fontSize: '0.85rem', gap: '0.4rem' }}
+                              >
+                                <Eye size={16} /> {isExpanded ? 'Masquer' : 'Diagnostic'}
+                              </button>
+                              <button
+                                onClick={() => handleDeleteAnalysis(a.id)}
+                                title="Supprimer l'analyse"
+                                style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0.3rem', display: 'flex', alignItems: 'center' }}
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Panneau détaillé de l'analyse + Smart Workflow */}
+                          {isExpanded && a.disease_info && (
+                            <div className="animate-fade-in" style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--color-border)', display: 'grid', gridTemplateColumns: imgUrl ? '180px 1fr' : '1fr', gap: '1.5rem' }}>
+                              {imgUrl && (
+                                <img
+                                  src={imgUrl}
+                                  alt="Feuille analysée"
+                                  style={{ width: '100%', height: '160px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}
+                                />
+                              )}
+                              <div>
+                                {a.disease_info.description && (
+                                  <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.92rem', marginBottom: '0.85rem' }}>
+                                    {a.disease_info.description}
+                                  </p>
+                                )}
+                                {a.disease_info.symptoms && (
+                                  <div style={{ marginBottom: '0.85rem' }}>
+                                    <h4 style={{ color: 'var(--color-secondary)', fontSize: '0.9rem', marginBottom: '0.25rem' }}>Symptômes observés :</h4>
+                                    <p style={{ fontSize: '0.9rem', margin: 0 }}>{a.disease_info.symptoms}</p>
+                                  </div>
+                                )}
+                                {a.disease_info.advice && (
+                                  <div style={{ marginBottom: '1rem' }}>
+                                    <h4 style={{ color: 'var(--color-primary)', fontSize: '0.9rem', marginBottom: '0.25rem' }}>Traitement recommandé :</h4>
+                                    <p style={{ fontSize: '0.9rem', margin: 0 }}>{a.disease_info.advice}</p>
+                                  </div>
+                                )}
+
+                                {/* Bouton Smart Workflow : Créer une tâche de traitement */}
+                                {!createdTaskIds[a.id] ? (
+                                  <button
+                                    className="btn btn-primary"
+                                    onClick={() => handleCreateTaskFromAnalysis(a)}
+                                    disabled={creatingTaskForId === a.id}
+                                    style={{ padding: '0.55rem 1.2rem', fontSize: '0.9rem' }}
+                                  >
+                                    <CalendarPlus size={17} />
+                                    {creatingTaskForId === a.id
+                                      ? 'Planification...'
+                                      : isHealthy
+                                        ? 'Planifier un contrôle de suivi'
+                                        : 'Planifier le traitement dans Mes Tâches'}
+                                  </button>
+                                ) : (
+                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '1rem', padding: '0.5rem 1rem', borderRadius: 'var(--radius-sm)', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.35)' }}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--color-primary)', fontWeight: 600, fontSize: '0.9rem' }}>
+                                      <Check size={17} /> Tâche planifiée !
+                                    </span>
+                                    <Link to="/tasks" style={{ color: 'white', fontSize: '0.85rem', textDecoration: 'underline', fontWeight: 500 }}>
+                                      Voir mes tâches →
+                                    </Link>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        {a.confidence && (
-                          <span style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--color-primary)', padding: '0.25rem 0.75rem', borderRadius: '100px', fontWeight: 600 }}>
-                            {Math.round(a.confidence * 100)}%
-                          </span>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </>
             )}
 
             {activeTab === 'settings' && (
-              <div className="glass-card">
-                <h2>Paramètres</h2>
-                <p style={{ marginTop: '1rem' }}>Fonctionnalité en cours de développement.</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                <h2 style={{ margin: 0 }}>Paramètres du Compte</h2>
+
+                {settingsMsg && (
+                  <div className="glass-card animate-fade-in" style={{
+                    padding: '1rem 1.25rem',
+                    background: settingsMsg.type === 'success' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                    borderColor: settingsMsg.type === 'success' ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)',
+                    color: settingsMsg.type === 'success' ? 'var(--color-primary)' : '#f87171',
+                    fontWeight: 500,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <span>{settingsMsg.text}</span>
+                    <button onClick={() => setSettingsMsg(null)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}>✕</button>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2" style={{ alignItems: 'start' }}>
+                  {/* Informations du profil */}
+                  <div className="glass-card">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                      <User size={22} color="var(--color-primary)" />
+                      <h3 style={{ fontSize: '1.25rem', color: 'white', margin: 0 }}>Informations du Profil</h3>
+                    </div>
+                    <form onSubmit={handleUpdateProfile} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '0.4rem' }}>Nom d'utilisateur</label>
+                        <input
+                          style={inputStyle}
+                          required
+                          value={profileForm.username}
+                          onChange={e => setProfileForm({ ...profileForm, username: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '0.4rem' }}>Adresse e-mail</label>
+                        <input
+                          style={inputStyle}
+                          type="email"
+                          required
+                          value={profileForm.email}
+                          onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '0.4rem' }}>Rôle du compte</label>
+                        <input
+                          style={{ ...inputStyle, opacity: 0.6, cursor: 'not-allowed' }}
+                          disabled
+                          value={user?.role === 'ADMINISTRATEUR' ? 'Administrateur' : 'Agriculteur'}
+                        />
+                      </div>
+                      <button type="submit" className="btn btn-primary" disabled={savingSettings} style={{ marginTop: '0.5rem' }}>
+                        Enregistrer les modifications
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Changement de mot de passe */}
+                  <div className="glass-card">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                      <Lock size={22} color="var(--color-primary)" />
+                      <h3 style={{ fontSize: '1.25rem', color: 'white', margin: 0 }}>Sécurité & Mot de passe</h3>
+                    </div>
+                    <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '0.4rem' }}>Mot de passe actuel</label>
+                        <input
+                          style={inputStyle}
+                          type="password"
+                          required
+                          placeholder="••••••••"
+                          value={passwordForm.current_password}
+                          onChange={e => setPasswordForm({ ...passwordForm, current_password: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '0.4rem' }}>Nouveau mot de passe</label>
+                        <input
+                          style={inputStyle}
+                          type="password"
+                          required
+                          minLength={6}
+                          placeholder="Au moins 6 caractères"
+                          value={passwordForm.new_password}
+                          onChange={e => setPasswordForm({ ...passwordForm, new_password: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '0.4rem' }}>Confirmer le nouveau mot de passe</label>
+                        <input
+                          style={inputStyle}
+                          type="password"
+                          required
+                          minLength={6}
+                          placeholder="••••••••"
+                          value={passwordForm.confirm_password}
+                          onChange={e => setPasswordForm({ ...passwordForm, confirm_password: e.target.value })}
+                        />
+                      </div>
+                      <button type="submit" className="btn btn-outline" disabled={savingSettings} style={{ marginTop: '0.5rem' }}>
+                        Mettre à jour le mot de passe
+                      </button>
+                    </form>
+                  </div>
+                </div>
               </div>
             )}
           </main>

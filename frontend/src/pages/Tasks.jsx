@@ -12,23 +12,22 @@ function Tasks() {
   const [newTask, setNewTask] = useState({ title: '', description: '', due_date: '', culture: '', status: 'PENDING' });
 
   useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [tasksRes, culturesRes] = await Promise.all([
+          api.get('tasks/'),
+          api.get('cultures/')
+        ]);
+        setTasks(tasksRes.data);
+        setCultures(culturesRes.data);
+      } catch (err) {
+        if (err.response && err.response.status === 401) navigate('/login');
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    try {
-      const [tasksRes, culturesRes] = await Promise.all([
-        api.get('tasks/'),
-        api.get('cultures/')
-      ]);
-      setTasks(tasksRes.data);
-      setCultures(culturesRes.data);
-    } catch (err) {
-      if (err.response && err.response.status === 401) navigate('/login');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [navigate]);
 
   const handleAddTask = async (e) => {
     e.preventDefault();
@@ -40,7 +39,7 @@ function Tasks() {
       setTasks([res.data, ...tasks]);
       setShowAddModal(false);
       setNewTask({ title: '', description: '', due_date: '', culture: '', status: 'PENDING' });
-    } catch (err) {
+    } catch {
       alert("Erreur lors de l'ajout de la tâche");
     }
   };
@@ -50,7 +49,7 @@ function Tasks() {
     try {
       await api.delete(`tasks/${id}/`);
       setTasks(tasks.filter(t => t.id !== id));
-    } catch (err) {
+    } catch {
       alert("Erreur lors de la suppression");
     }
   };
@@ -59,7 +58,7 @@ function Tasks() {
     try {
       const res = await api.put(`tasks/${task.id}/`, { ...task, status: newStatus });
       setTasks(tasks.map(t => t.id === task.id ? res.data : t));
-    } catch (err) {
+    } catch {
       alert("Erreur lors de la mise à jour");
     }
   };
@@ -88,33 +87,41 @@ function Tasks() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
-        {tasks.map(task => (
-          <div key={task.id} className="glass-card" style={{ padding: '1.5rem', borderLeft: task.status === 'COMPLETED' ? '4px solid var(--color-primary)' : '4px solid #f59e0b' }}>
-            <h3 style={{ marginBottom: '0.5rem', fontSize: '1.2rem', textDecoration: task.status === 'COMPLETED' ? 'line-through' : 'none', color: task.status === 'COMPLETED' ? 'var(--color-text-muted)' : 'white' }}>{task.title}</h3>
-            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>{task.description}</p>
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', marginBottom: '1rem' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-primary)' }}>
-                <Calendar size={16} /> {task.due_date || 'Pas de date'}
-              </span>
-            </div>
+        {tasks.map(task => {
+          const linkedCulture = task.culture_info || cultures.find(c => c.id === task.culture);
+          return (
+            <div key={task.id} className="glass-card" style={{ padding: '1.5rem', borderLeft: task.status === 'COMPLETED' ? '4px solid var(--color-primary)' : '4px solid #f59e0b' }}>
+              {linkedCulture && (
+                <span className="badge" style={{ marginBottom: '0.6rem', fontSize: '0.75rem' }}>
+                  🌱 {linkedCulture.name} ({linkedCulture.plant_type})
+                </span>
+              )}
+              <h3 style={{ marginBottom: '0.5rem', fontSize: '1.2rem', textDecoration: task.status === 'COMPLETED' ? 'line-through' : 'none', color: task.status === 'COMPLETED' ? 'var(--color-text-muted)' : 'white' }}>{task.title}</h3>
+              <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', marginBottom: '1rem', whiteSpace: 'pre-line' }}>{task.description}</p>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-primary)' }}>
+                  <Calendar size={16} /> {task.due_date || 'Pas de date'}
+                </span>
+              </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
-              <select 
-                value={task.status} 
-                onChange={(e) => handleStatusChange(task, e.target.value)}
-                style={{ background: 'transparent', color: 'white', border: '1px solid var(--color-border)', borderRadius: '4px', padding: '0.2rem 0.5rem', cursor: 'pointer' }}
-              >
-                <option value="PENDING" style={{color: 'black'}}>En attente</option>
-                <option value="IN_PROGRESS" style={{color: 'black'}}>En cours</option>
-                <option value="COMPLETED" style={{color: 'black'}}>Terminé</option>
-              </select>
-              <button onClick={() => handleDeleteTask(task.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>
-                <Trash2 size={20} />
-              </button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
+                <select 
+                  value={task.status} 
+                  onChange={(e) => handleStatusChange(task, e.target.value)}
+                  style={{ background: 'transparent', color: 'white', border: '1px solid var(--color-border)', borderRadius: '4px', padding: '0.2rem 0.5rem', cursor: 'pointer' }}
+                >
+                  <option value="PENDING" style={{color: 'black'}}>En attente</option>
+                  <option value="IN_PROGRESS" style={{color: 'black'}}>En cours</option>
+                  <option value="COMPLETED" style={{color: 'black'}}>Terminé</option>
+                </select>
+                <button onClick={() => handleDeleteTask(task.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>
+                  <Trash2 size={20} />
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {tasks.length === 0 && <p style={{ color: 'var(--color-text-muted)', gridColumn: '1 / -1' }}>Aucune tâche trouvée.</p>}
       </div>
 
